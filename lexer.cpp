@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
 using namespace std;
 enum Token {
@@ -91,6 +92,8 @@ static unique_ptr<exprAST> parsePrimay() {
             return parseNumberExpr();
         case '(':
             return parseParenExpr();
+        default:
+            return logError("unkown token when expecting an expression");
     }
 }
 
@@ -166,6 +169,20 @@ class functionAST {
         : prototype(move(proto)), body(move(bod)) {}
 };
 
+//bin op precedence  - holds the precedence for each binary operator.
+static map<char, int> BinOpPrecedence;
+
+//GetTokPrecen - Get the precedence of the pending binary operator token.
+static int getTokPrecedence() {
+    if(!isascii(curTok))
+        return -1;
+    
+    //make sure it is a declared binary operator
+    int tokPrec = BinOpPrecedence[curTok];
+    if(tokPrec <= 0) return -1;
+    return tokPrec;
+}
+
 // returnNextTokenFromInput - return next token form standard input
 static int returnNextTokenFromInput() {
     static int lastChar = ' ';
@@ -206,4 +223,47 @@ static int returnNextTokenFromInput() {
     int retChar = lastChar;
     lastChar = getchar();
     return retChar;
+}
+
+static unique_ptr<exprAST> parseExpression() {
+    auto LHS = parsePrimay();
+    if(!LHS)
+        return nullptr;
+    
+    return parseBinaryOperatorRHS(0,move(LHS));
+}
+
+//binary Operator 
+static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec, unique_ptr<exprAST> LHS){
+    //if is a binary operator, find its precedence.
+    while(1) {
+        int tokPrec = getTokPrecedence();
+
+        if(tokPrec < exprPrec)
+            return LHS;
+        
+        int binOp = curTok;
+        getNextToken();
+        auto RHS = parsePrimay();
+        if(!RHS) return nullptr;
+        
+        int nextPrec = getTokPrecedence();
+        if(tokPrec < nextPrec) {
+            // TODO : create AST node for a_b expresson
+        }
+
+        //Merge LHS/RHS
+        LHS = make_unique<binaryExprAST>(binOp,move(LHS),move(RHS));
+    }
+}
+
+int main() {
+    BinOpPrecedence['<'] = 10;
+    BinOpPrecedence['+'] = 20;
+    BinOpPrecedence['-'] = 30;
+    BinOpPrecedence['*'] = 40;
+    // BinOpPrecedence['>'] = 50;
+    // BinOpPrecedence['/'] = 60;
+    
+    return 0;
 }
