@@ -24,18 +24,74 @@ static double numValue;       //数字的值
 // getNextToken reads another token form the lexer and updates CurTok with its
 // results
 static int curTok;
-static int getNextToken() {
-    return curTok = returnNextTokenFromInput();
-}
+static int getNextToken() { return curTok = returnNextTokenFromInput(); }
 
-//logError - help function for error handling
-unique_ptr<exprAST> logError(const char* Str){
-    fprintf(stderr,"logError:%s\n", Str);
+// logError - help function for error handling
+unique_ptr<exprAST> logError(const char* Str) {
+    fprintf(stderr, "logError:%s\n", Str);
     return nullptr;
 }
-unique_ptr<prototypeAST> prototypeLogError(const char* Str){
+unique_ptr<prototypeAST> prototypeError(const char* Str) {
     logError(Str);
     return nullptr;
+}
+
+// number expression
+static unique_ptr<exprAST> parseNumberExpr() {
+    auto result = make_unique<numExprAST>(numValue);
+    getNextToken();  // consume the number
+    return move(result);
+}
+
+// paren expression
+static unique_ptr<exprAST> parseParenExpr() {
+    getNextToken();  // eat (
+    auto V = parseExpression();
+
+    if (!V) return logError("expectrd ')'");
+    getNextToken();  // eat )
+    return V;
+}
+
+// identifier
+static unique_ptr<exprAST> parseIdentifierExpr() {
+    string idName = identifierStr;
+
+    getNextToken();
+
+    if (curTok != '(') return make_unique<variableExprAST>(idName);
+
+    // call
+    getNextToken();
+    vector<unique_ptr<exprAST>> args;
+    if (curTok != ')') {
+        while (1) {
+            if (auto Arg = parseExpression())
+                args.push_back(move(Arg));
+            else
+                return nullptr;
+
+            if (curTok == ')') break;
+
+            if (curTok != ',')
+                return logError("expected ')' or ','in argument list");
+            getNextToken();
+        }
+    }
+    getNextToken();
+    return make_unique<callExprAST>(idName, move(args));
+}
+// primary
+// identifier,numberexpr,parenexpr
+static unique_ptr<exprAST> parsePrimay() {
+    switch (curTok) {
+        case tokIdentifier:
+            return parseIdentifierExpr();
+        case tokNum:
+            return parseNumberExpr();
+        case '(':
+            return parseParenExpr();
+    }
 }
 
 // exprAST - Base class for all expression nodes on AST
