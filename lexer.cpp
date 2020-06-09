@@ -3,6 +3,10 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include "llvm/ADT/STLExtras.h"
 
 using namespace std;
 enum Token {
@@ -256,6 +260,56 @@ static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec, unique_ptr<exprA
         LHS = make_unique<binaryExprAST>(binOp,move(LHS),move(RHS));
     }
 }
+
+//prototype
+static unique_ptr<prototypeAST> parsePrototype() {
+    if(curTok != tokIdentifier)
+        return prototypeError("expected function name in prototype");
+    string functionName = identifierStr;
+    getNextToken();
+
+    if(curTok!='(')
+        return prototypeError("expected '(' in prototype");
+
+    //read the list of argument names
+    vector<string> argNames;
+    while(getNextToken()==tokIdentifier)
+        argNames.push_back(identifierStr);
+    if(curTok!=')')
+        return prototypeError("expected ')' int prototype");
+
+    //success
+    getNextToken(); 
+
+    return make_unique<prototypeAST>(functionName,move(argNames));
+}
+
+//def function
+static unique_ptr<functionAST> parseDefinition() {
+    getNextToken();  //def identifier
+    auto prototype = parsePrototype();
+    if(!prototype) return nullptr;
+
+    if(auto body = parseExpression())
+        return make_unique<functionAST>(move(prototype),move(body));
+    return nullptr;
+}
+//extern definition
+static unique_ptr<prototypeAST> parseExtern() {
+    getNextToken(); // extern def
+    return parsePrototype();
+}
+
+// high level expression
+static unique_ptr<functionAST> parseTopLevelExpr() {
+    if(auto body = parseExpression()) {
+        auto prototype = make_unique<prototypeAST>(""/*anonymous function*/,vector<string>());
+        return make_unique<functionAST>(move(prototype),move(body));
+    }
+    return nullptr;
+}
+
+
 
 int main() {
     BinOpPrecedence['<'] = 10;
