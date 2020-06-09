@@ -1,11 +1,12 @@
+#include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
-#include <map>
-#include <algorithm>
-#include <cstdio>
-#include <cstdlib>
+
 #include "llvm/ADT/STLExtras.h"
 
 using namespace std;
@@ -173,17 +174,16 @@ class functionAST {
         : prototype(move(proto)), body(move(bod)) {}
 };
 
-//bin op precedence  - holds the precedence for each binary operator.
+// bin op precedence  - holds the precedence for each binary operator.
 static map<char, int> BinOpPrecedence;
 
-//GetTokPrecen - Get the precedence of the pending binary operator token.
+// GetTokPrecen - Get the precedence of the pending binary operator token.
 static int getTokPrecedence() {
-    if(!isascii(curTok))
-        return -1;
-    
-    //make sure it is a declared binary operator
+    if (!isascii(curTok)) return -1;
+
+    // make sure it is a declared binary operator
     int tokPrec = BinOpPrecedence[curTok];
-    if(tokPrec <= 0) return -1;
+    if (tokPrec <= 0) return -1;
     return tokPrec;
 }
 
@@ -231,84 +231,130 @@ static int returnNextTokenFromInput() {
 
 static unique_ptr<exprAST> parseExpression() {
     auto LHS = parsePrimay();
-    if(!LHS)
-        return nullptr;
-    
-    return parseBinaryOperatorRHS(0,move(LHS));
+    if (!LHS) return nullptr;
+
+    return parseBinaryOperatorRHS(0, move(LHS));
 }
 
-//binary Operator 
-static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec, unique_ptr<exprAST> LHS){
-    //if is a binary operator, find its precedence.
-    while(1) {
+// binary Operator
+static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec,
+                                                  unique_ptr<exprAST> LHS) {
+    // if is a binary operator, find its precedence.
+    while (1) {
         int tokPrec = getTokPrecedence();
 
-        if(tokPrec < exprPrec)
-            return LHS;
-        
+        if (tokPrec < exprPrec) return LHS;
+
         int binOp = curTok;
         getNextToken();
         auto RHS = parsePrimay();
-        if(!RHS) return nullptr;
-        
+        if (!RHS) return nullptr;
+
         int nextPrec = getTokPrecedence();
-        if(tokPrec < nextPrec) {
+        if (tokPrec < nextPrec) {
             // TODO : create AST node for a_b expresson
         }
 
-        //Merge LHS/RHS
-        LHS = make_unique<binaryExprAST>(binOp,move(LHS),move(RHS));
+        // Merge LHS/RHS
+        LHS = make_unique<binaryExprAST>(binOp, move(LHS), move(RHS));
     }
 }
 
-//prototype
+// prototype
 static unique_ptr<prototypeAST> parsePrototype() {
-    if(curTok != tokIdentifier)
+    if (curTok != tokIdentifier)
         return prototypeError("expected function name in prototype");
     string functionName = identifierStr;
     getNextToken();
 
-    if(curTok!='(')
-        return prototypeError("expected '(' in prototype");
+    if (curTok != '(') return prototypeError("expected '(' in prototype");
 
-    //read the list of argument names
+    // read the list of argument names
     vector<string> argNames;
-    while(getNextToken()==tokIdentifier)
-        argNames.push_back(identifierStr);
-    if(curTok!=')')
-        return prototypeError("expected ')' int prototype");
+    while (getNextToken() == tokIdentifier) argNames.push_back(identifierStr);
+    if (curTok != ')') return prototypeError("expected ')' int prototype");
 
-    //success
-    getNextToken(); 
+    // success
+    getNextToken();
 
-    return make_unique<prototypeAST>(functionName,move(argNames));
+    return make_unique<prototypeAST>(functionName, move(argNames));
 }
 
-//def function
+// def function
 static unique_ptr<functionAST> parseDefinition() {
-    getNextToken();  //def identifier
+    getNextToken();  // def identifier
     auto prototype = parsePrototype();
-    if(!prototype) return nullptr;
+    if (!prototype) return nullptr;
 
-    if(auto body = parseExpression())
-        return make_unique<functionAST>(move(prototype),move(body));
+    if (auto body = parseExpression())
+        return make_unique<functionAST>(move(prototype), move(body));
     return nullptr;
 }
-//extern definition
+// extern definition
 static unique_ptr<prototypeAST> parseExtern() {
-    getNextToken(); // extern def
+    getNextToken();  // extern def
     return parsePrototype();
 }
 
 // high level expression
 static unique_ptr<functionAST> parseTopLevelExpr() {
-    if(auto body = parseExpression()) {
-        auto prototype = make_unique<prototypeAST>(""/*anonymous function*/,vector<string>());
-        return make_unique<functionAST>(move(prototype),move(body));
+    if (auto body = parseExpression()) {
+        auto prototype = make_unique<prototypeAST>("" /*anonymous function*/,
+                                                   vector<string>());
+        return make_unique<functionAST>(move(prototype), move(body));
     }
     return nullptr;
 }
 
+static void HandleDefinition() {
+    if (parseDefinition()) {
+        fprintf(stderr, "Parsed a function definition.\n");
+    } else {
+        // Skip token for error recovery.
+        getNextToken();
+    }
+}
+
+static void HandleExtern() {
+    if (parseExtern()) {
+        fprintf(stderr, "Parsed an extern\n");
+    } else {
+        // Skip token for error recovery.
+        getNextToken();
+    }
+}
+
+static void HandleTopLevelExpression() {
+    // Evaluate a top-level expression into an anonymous function.
+    if (parseTopLevelExpr()) {
+        fprintf(stderr, "Parsed a top-level expr\n");
+    } else {
+        // Skip token for error recovery.
+        getNextToken();
+    }
+}
+
+static void MainLoop() {
+    while (true) {
+        fprintf(stderr, "ready> ");
+        switch (curTok) {
+            case tok_eof:
+                return;
+            case ';':  // ignore top-level semicolons.
+                getNextToken();
+                break;
+            case tokDef:
+                HandleDefinition();
+                break;
+            case tokExtern:
+                HandleExtern();
+                break;
+            default:
+                HandleTopLevelExpression();
+                break;
+        }
+    }
+}
 
 
 int main() {
@@ -319,5 +365,12 @@ int main() {
     // BinOpPrecedence['>'] = 50;
     // BinOpPrecedence['/'] = 60;
     
+    // Prime the first token.
+    fprintf(stderr, "ready> ");
+    getNextToken();
+
+    // Run the main "interpreter loop" now.
+    MainLoop();
+
     return 0;
 }
