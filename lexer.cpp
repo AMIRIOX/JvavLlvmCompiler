@@ -1,9 +1,12 @@
 /*
  * @Author: AMIRIOX無暝 
- * @Date: 2020-06-09 10:54:37 
+ * @Date: 2020-06-15 12:02:36 
  * @Last Modified by:   AMIRIOX無暝 
- * @Last Modified time: 2020-06-09 10:54:37 
+ * @Last Modified time: 2020-06-15 12:02:36 
  */
+
+#include <stddef.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -13,9 +16,36 @@
 #include <string>
 #include <vector>
 
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
 
+using namespace llvm;
 using namespace std;
+
+static int returnNextTokenFromInput();
+static int getTokPrecedence();
+static int getTokPrecedence();
+
+class exprAST;
+class numExprAST;
+class variableExprAST;
+class binaryExprAST;
+class callExprAST;
+class prototypeAST;
+class functionAST;
+
+static unique_ptr<exprAST> parseNumberExpr();
+static unique_ptr<exprAST> parseParenExpr();
+static unique_ptr<exprAST> parseIdentifierExpr();
+static unique_ptr<exprAST> parsePrimay();
+static unique_ptr<exprAST> parseExpression();
+static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec,
+                                                  unique_ptr<exprAST> LHS);
+static unique_ptr<prototypeAST> parsePrototype();
+static unique_ptr<functionAST> parseDefinition();
+static unique_ptr<prototypeAST> parseExtern();
+static unique_ptr<functionAST> parseTopLevelExpr();
+
 enum Token {
     tokEof = -1,         //文件结束
     tokDef = -2,         // def关键字
@@ -37,76 +67,6 @@ static double numValue;       //数字的值
 // results
 static int curTok;
 static int getNextToken() { return curTok = returnNextTokenFromInput(); }
-
-// logError - help function for error handling
-unique_ptr<exprAST> logError(const char* Str) {
-    fprintf(stderr, "logError:%s\n", Str);
-    return nullptr;
-}
-unique_ptr<prototypeAST> prototypeError(const char* Str) {
-    logError(Str);
-    return nullptr;
-}
-
-// number expression
-static unique_ptr<exprAST> parseNumberExpr() {
-    auto result = make_unique<numExprAST>(numValue);
-    getNextToken();  // consume the number
-    return move(result);
-}
-
-// paren expression
-static unique_ptr<exprAST> parseParenExpr() {
-    getNextToken();  // eat (
-    auto V = parseExpression();
-
-    if (!V) return logError("expectrd ')'");
-    getNextToken();  // eat )
-    return V;
-}
-
-// identifier
-static unique_ptr<exprAST> parseIdentifierExpr() {
-    string idName = identifierStr;
-
-    getNextToken();
-
-    if (curTok != '(') return make_unique<variableExprAST>(idName);
-
-    // call
-    getNextToken();
-    vector<unique_ptr<exprAST>> args;
-    if (curTok != ')') {
-        while (1) {
-            if (auto Arg = parseExpression())
-                args.push_back(move(Arg));
-            else
-                return nullptr;
-
-            if (curTok == ')') break;
-
-            if (curTok != ',')
-                return logError("expected ')' or ','in argument list");
-            getNextToken();
-        }
-    }
-    getNextToken();
-    return make_unique<callExprAST>(idName, move(args));
-}
-// primary
-// identifier,numberexpr,parenexpr
-static unique_ptr<exprAST> parsePrimay() {
-    switch (curTok) {
-        case tokIdentifier:
-            return parseIdentifierExpr();
-        case tokNum:
-            return parseNumberExpr();
-        case '(':
-            return parseParenExpr();
-        default:
-            return logError("unkown token when expecting an expression");
-    }
-}
 
 // exprAST - Base class for all expression nodes on AST
 class exprAST {
@@ -155,7 +115,6 @@ class callExprAST : public exprAST {
     callExprAST(const string& funcCallee, vector<unique_ptr<exprAST>> funcArgs)
         : callee(funcCallee), args(move(funcArgs)) {}
 };
-
 // prototypeAST - Represents the "prototype" for a function,
 // which captures its name, and its argument names(thus implicitly the number of
 // arguments the function takes)
@@ -179,6 +138,76 @@ class functionAST {
     functionAST(unique_ptr<prototypeAST> proto, unique_ptr<exprAST> bod)
         : prototype(move(proto)), body(move(bod)) {}
 };
+
+// logError - help function for error handling
+unique_ptr<exprAST> logError(const char* Str) {
+    fprintf(stderr, "logError:%s\n", Str);
+    return NULL;
+}
+unique_ptr<prototypeAST> prototypeError(const char* Str) {
+    logError(Str);
+    return NULL;
+}
+
+// number expression
+static unique_ptr<exprAST> parseNumberExpr() {
+    auto result = make_unique<numExprAST>(numValue);
+    getNextToken();  // consume the number
+    return move(result);
+}
+
+// paren expression
+static unique_ptr<exprAST> parseParenExpr() {
+    getNextToken();  // eat (
+    auto V = parseExpression();
+
+    if (!V) return logError("expectrd ')'");
+    getNextToken();  // eat )
+    return V;
+}
+
+// identifier
+static unique_ptr<exprAST> parseIdentifierExpr() {
+    string idName = identifierStr;
+
+    getNextToken();
+
+    if (curTok != '(') return make_unique<variableExprAST>(idName);
+
+    // call
+    getNextToken();
+    vector<unique_ptr<exprAST>> args;
+    if (curTok != ')') {
+        while (1) {
+            if (auto Arg = parseExpression())
+                args.push_back(move(Arg));
+            else
+                return NULL;
+
+            if (curTok == ')') break;
+
+            if (curTok != ',')
+                return logError("expected ')' or ','in argument list");
+            getNextToken();
+        }
+    }
+    getNextToken();
+    return make_unique<callExprAST>(idName, move(args));
+}
+// primary
+// identifier,numberexpr,parenexpr
+static unique_ptr<exprAST> parsePrimay() {
+    switch (curTok) {
+        case tokIdentifier:
+            return parseIdentifierExpr();
+        case tokNum:
+            return parseNumberExpr();
+        case '(':
+            return parseParenExpr();
+        default:
+            return logError("unkown token when expecting an expression");
+    }
+}
 
 // bin op precedence  - holds the precedence for each binary operator.
 static map<char, int> BinOpPrecedence;
@@ -237,7 +266,7 @@ static int returnNextTokenFromInput() {
 
 static unique_ptr<exprAST> parseExpression() {
     auto LHS = parsePrimay();
-    if (!LHS) return nullptr;
+    if (!LHS) return NULL;
 
     return parseBinaryOperatorRHS(0, move(LHS));
 }
@@ -254,7 +283,7 @@ static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec,
         int binOp = curTok;
         getNextToken();
         auto RHS = parsePrimay();
-        if (!RHS) return nullptr;
+        if (!RHS) return NULL;
 
         int nextPrec = getTokPrecedence();
         if (tokPrec < nextPrec) {
@@ -290,11 +319,11 @@ static unique_ptr<prototypeAST> parsePrototype() {
 static unique_ptr<functionAST> parseDefinition() {
     getNextToken();  // def identifier
     auto prototype = parsePrototype();
-    if (!prototype) return nullptr;
+    if (!prototype) return NULL;
 
     if (auto body = parseExpression())
         return make_unique<functionAST>(move(prototype), move(body));
-    return nullptr;
+    return NULL;
 }
 // extern definition
 static unique_ptr<prototypeAST> parseExtern() {
@@ -309,7 +338,7 @@ static unique_ptr<functionAST> parseTopLevelExpr() {
                                                    vector<string>());
         return make_unique<functionAST>(move(prototype), move(body));
     }
-    return nullptr;
+    return NULL;
 }
 
 static void HandleDefinition() {
@@ -344,7 +373,7 @@ static void MainLoop() {
     while (true) {
         fprintf(stderr, "ready> ");
         switch (curTok) {
-            case tok_eof:
+            case tokEof:
                 return;
             case ';':  // ignore top-level semicolons.
                 getNextToken();
@@ -362,7 +391,6 @@ static void MainLoop() {
     }
 }
 
-
 int main() {
     BinOpPrecedence['<'] = 10;
     BinOpPrecedence['+'] = 20;
@@ -370,7 +398,7 @@ int main() {
     BinOpPrecedence['*'] = 40;
     // BinOpPrecedence['>'] = 50;
     // BinOpPrecedence['/'] = 60;
-    
+
     // Prime the first token.
     fprintf(stderr, "ready> ");
     getNextToken();
