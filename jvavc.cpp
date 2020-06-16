@@ -328,7 +328,7 @@ static unique_ptr<exprAST> parseBinaryOperatorRHS(int exprPrec,
         int nextPrec = getTokPrecedence();
         if (tokPrec < nextPrec) {
             // // TODO : create AST node for a_b expresson
-            RHS = ParseBinOpRHS(TokPrec + 1, std::move(RHS));
+            RHS = parseBinaryOperatorRHS(tokPrec + 1, move(RHS));
             if (!RHS)
                 return NULL;
         }
