@@ -52,11 +52,10 @@ $ clang++ -g jvavc.cpp `llvm-config --cxxflags --ldflags --system-lib --libs cor
 ---
 
 # Information
-Author: Amiriox of **Jvav Development Team**
+Author: Amiriox of [**Jvav Development Team**]( https://gitee.com/JvavDev/ )
 
 ---
 
 # About LLVM
-无法显示LLVM_logo.svg,属正常现象
 > LLVM是一个自由软件项目，它是一种编译器基础设施，以C++写成，包含一系列模块化的编译器组件和工具链，用来开发编译器前端和后端。它是为了任意一种编程语言而写成的程序，利用虚拟技术创造出编译时期、链接时期、运行时期以及“闲置时期”的最优化。它最早以C/C++为实现对象，而目前它已支持包括ActionScript、Ada、D语言、Fortran、GLSL、Haskell、Java字节码、Objective-C、Swift、Python、Ruby、Crystal、Rust、Scala[1]以及C#[2]等语言。
-![](LLVM_logo.svg)
+![](llvmlogo.png)
